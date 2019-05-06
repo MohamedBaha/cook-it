@@ -5,6 +5,7 @@ from snipsTools import SnipsConfigParser
 from hermes_python.hermes import Hermes
 from hermes_python.ontology import *
 import io
+import paho.mqtt.client as mqtt
 
 import sys
 from threading import Timer
@@ -33,24 +34,42 @@ HERMES_SAY 					= 'hermes/tts/say'
 HERMES_CAPTURED 			= 'hermes/asr/textCaptured'
 HERMES_HOTWORD_TOGGLE_ON 	= 'hermes/hotword/toggleOn'
 
-def onConnect(client, userData, flags, rc):
-	mqttClient.subscribe(OPEN_RECIPE)
-	mqttClient.subscribe(NEXT_STEP)
-	mqttClient.subscribe(INGREDIENTS)
-	mqttClient.subscribe(PREVIOUS_STEP)
-	mqttClient.subscribe(REPEAT_STEP)
-	mqttClient.subscribe(ACTIVATE_TIMER)
 
-	mqttClient.subscribe(HERMES_ON_HOTWORD)
-	mqttClient.subscribe(HERMES_START_LISTENING)
-	mqttClient.subscribe(HERMES_SAY)
-	mqttClient.subscribe(HERMES_CAPTURED)
-	mqttClient.subscribe(HERMES_HOTWORD_TOGGLE_ON)
+ def getRecetteFile(intent_message):    
+		
+        searchtermU = intentMessage.slots.mot_label.first().value
+        searchterm = "{}".format(str(searchtermU.encode('utf-8')))
+        #searchterm = "{}".format(str(intentMessage.slots.mot_label.first().value))
+
+        baseUrl = u'http://' + server_address + u'/Cook_it/apirest/Informations/getSpecificRecette?idRecette='
+        endUrl = u''
+        finalurl = baseUrl + urllib.quote(searchterm) + endUrl
+
+     	response= requests.get(finalurl)
+        recipe=response.json()
+	recipe_name=recette['name']
+
+	
+	return recipe, recipe_name
+        ##print '[Received] intent: {}'.format(intent_message.intent.intent_name)
+
+
+def onConnect(client, userData, flags, rc):
+	mqtt.subscribe('hermes/intent/#')
+
+	mqtt.subscribe(HERMES_ON_HOTWORD)
+	mqtt.subscribe(HERMES_START_LISTENING)
+	mqtt.subscribe(HERMES_SAY)
+	mqtt.subscribe(HERMES_CAPTURED)
+	mqtt.subscribe(HERMES_HOTWORD_TOGGLE_ON)
 	mqttPublish.single('hermes/feedback/sound/toggleOn', payload=json.dumps({'siteId': 'default'}), hostname='127.0.0.1', port=1883)
 
-def onMessage(client, userData, message):
-	global lang
-
+def onMessage(client, userData, message): 
+	
+	# Parse the json response
+   	#intent_json = json.loads(msg.payload)
+    	#intentName = intent_json['intent']['intentName']
+	
 	intent = message.topic
 
 	global recipe, currentStep, timers, confirm
@@ -68,7 +87,7 @@ def onMessage(client, userData, message):
 		if recipe is not None and currentStep > 0:
 			if confirm <= 0:
 				confirm = 1
-				endTalk(sessionId, text=lang['warningRecipeAlreadyOpen'])
+				endTalk(sessionId, text=['warningRecipeAlreadyOpen'])
 				return
 			else:
 				for timer in timers:
@@ -78,32 +97,29 @@ def onMessage(client, userData, message):
 				confirm = 0
 				currentStep = 0
 
-		if os.path.isfile('./recipes/{}/{}.json'.format(settings.LANG, slotRecipeName.lower())):
-			endTalk(sessionId, text=lang['confirmOpening'].format(payload['slots'][0]['rawValue']))
-			currentStep = 0
+		#if os.path.isfile('./recipes/{}/{}.json'.format(settings.LANG, slotRecipeName.lower())):
+		#	endTalk(sessionId, text=lang['confirmOpening'].format(payload['slots'][0]['rawValue']))
+		currentStep = 0
 
-			file = codecs.open('./recipes/{}/{}.json'.format(settings.LANG, slotRecipeName.lower()), 'r', encoding='utf-8')
-			string = file.read()
-			file.close()
-			recipe = json.loads(string)
+		
+		recipe,recipe_name = getRecetteFile(message)
 
-			time.sleep(2)
+		time.sleep(2)
 
-			recipeName = recipe['name'] if 'phonetic' not in recipe else recipe['phonetic']
-			timeType = lang['cookingTime'] if 'cookingTime' in recipe else lang['waitTime']
-			cookOrWaitTime = recipe['cookingTime'] if 'cookingTime' in recipe else recipe['waitTime']
+		#timeType = lang['cookingTime'] if 'cookingTime' in recipe else lang['waitTime']
+		#cookOrWaitTime = recipe['cookingTime'] if 'cookingTime' in recipe else recipe['waitTime']
 
-			say(text=lang['recipePresentation'].format(
-				recipeName,
-				recipe['difficulty'],
-				recipe['person'],
-				recipe['totalTime'],
-				recipe['preparationTime'],
-				cookOrWaitTime,
-				timeType
-			))
-		else:
-			endTalk(sessionId, text=lang['recipeNotFound'])
+		"""say(text=lang['recipePresentation'].format(
+			recipeName,
+			recipe['difficulty'],
+			recipe['person'],
+			recipe['totalTime'],
+			recipe['preparationTime'],
+			cookOrWaitTime,
+			timeType
+			))"""
+		#else:
+		#	endTalk(sessionId, text=lang['recipeNotFound'])
 
 	elif intent == NEXT_STEP:
 		if recipe is None:
@@ -128,10 +144,13 @@ def onMessage(client, userData, message):
 		if recipe is None:
 			endTalk(sessionId, text=lang['sorryNoRecipeOpen'])
 		else:
-			ingredients = ''
-			for ingredient in recipe['ingredients']:
-				ingredients += u"{}. ".format(ingredient)
-
+			ss=recipe['ingrédients']
+			ingredients=''
+			for i in range(len(ss)):
+    				sentence=''
+   	 			sentence= str(ss[i]['quantité'])+" " + str(ss[i]['unité']) + ' de ' +str(ss[i]['label'])
+    				ingredients+= u"{}. ".format(sentence)
+				
 			endTalk(sessionId, text=lang['neededIngredients'].format(recipe['name'], ingredients))
 
 	elif intent == PREVIOUS_STEP:
@@ -142,7 +161,7 @@ def onMessage(client, userData, message):
 				endTalk(sessionId, text=lang['noPreviousStep'])
 			else:
 				currentStep -= 1
-				step = recipe['steps'][str(currentStep)]
+				step = recipe['instruction(s)'][currentStep]["instruction"]
 
 				ask = False
 				timer = 0
@@ -162,14 +181,14 @@ def onMessage(client, userData, message):
 			if currentStep <= 1:
 				endTalk(sessionId, text=lang['nothingToSayNotStarted'])
 			else:
-				step = recipe['steps'][str(currentStep)]
+				step = recipe['instruction(s)'][currentStep]["instruction"]
 				endTalk(sessionId, text=lang['repeatStep'].format(step))
 
 	elif intent == ACTIVATE_TIMER:
 		if recipe is None:
 			endTalk(sessionId, text=lang['noTimerNotStarted'])
 		else:
-			step = recipe['steps'][str(currentStep)]
+			step = recipe['instruction(s)'][currentStep]["instruction"]
 
 			if type(step) is not dict:
 				endTalk(sessionId, text=lang['notTimerForThisStep'])
@@ -182,13 +201,13 @@ def onMessage(client, userData, message):
 				endTalk(sessionId, text=lang['timerConfirm'])
 
 
-class action(object):
-    """Class used to wrap action code with mqtt connection
+#class action(object):
+   """Class used to wrap action code with mqtt connection
         
         Please change the name refering to your application
     """
 
-    def __init__(self):
+"""    def __init__(self):
         # get the configuration if needed
         try:
             self.config = SnipsConfigParser.read_configuration_file(CONFIG_INI)
@@ -196,38 +215,10 @@ class action(object):
             self.config = None
 
         # start listening to MQTT
-        self.start_blocking()
+        self.start_blocking()"""
         
     # --> Sub callback function, one per intent
-    def openrecipe(self, hermes, intent_message):
-        # terminate the session first if not continue
-        hermes.publish_end_session(intent_message.session_id, "")
-        
-        # action code goes here...
-        searchtermU = intentMessage.slots.mot_label.first().value
-        searchterm = "{}".format(str(searchtermU.encode('utf-8')))
-        #searchterm = "{}".format(str(intentMessage.slots.mot_label.first().value))
-
-        baseUrl = u'http://' + server_address + u'/Cook_it/apirest/DuringRecette/recetteStart?idRecette='
-        endUrl = u''
-        finalurl = baseUrl + urllib.quote(searchterm) + endUrl
-
-        requests.get(finalurl)
-        response = requests.get('http://' + server_address + '/Cook_it/apirest/DuringRecette/getCurrentInstruction')
-
-        output = response.text
-        json_output = json.loads(output)
-
-        result_sentence = u'Démarrage de la recette de %s. Étape %s : %s' % (json_output[u'recetteLabel'], json_output[u'step'], json_output[u'description'])
-
-        current_session_id = intentMessage.session_id
-        hermes.publish_end_session(current_session_id, result_sentence)
-        
-        ##print '[Received] intent: {}'.format(intent_message.intent.intent_name)
-
-        # if need to speak the execution result by tts
-        hermes.publish_start_session_notification(intent_message.site_id,
-                                                    "Action1 has been done")
+   
 
   #  def intent_2_callback(self, hermes, intent_message):
         # terminate the session first if not continue
@@ -243,19 +234,68 @@ class action(object):
     # More callback function goes here...
 
     # --> Master callback function, triggered everytime an intent is recognized
-    def master_intent_callback(self,hermes, intent_message):
-        coming_intent = intent_message.intent.intent_name
-        if coming_intent == 'intent_1':
-            self.intent_1_callback(hermes, intent_message)
-        if coming_intent == 'intent_2':
-            self.intent_2_callback(hermes, intent_message)
+    #def master_intent_callback(self,hermes, intent_message):
+    #    coming_intent = intent_message.intent.intent_name
+    #    if coming_intent == 'intent_1':
+    #        self.intent_1_callback(hermes, intent_message)
+    #    if coming_intent == 'intent_2':
+    #        self.intent_2_callback(hermes, intent_message)
 
         # more callback and if condition goes here...
 
     # --> Register callback function and start MQTT
-    def start_blocking(self):
-        with Hermes(MQTT_ADDR) as h:
-            h.subscribe_intents(self.master_intent_callback).start()
 
-if __name__ == "__main__":
-    Template()
+def error(sessionId):
+	endTalk(sessionId, lang['error'])
+
+def endTalk(sessionId, text):
+	mqttClient.publish('hermes/dialogueManager/endSession', json.dumps({
+		'sessionId': sessionId,
+		'text': text
+	}))
+
+def say(text):
+	mqttClient.publish('hermes/dialogueManager/startSession', json.dumps({
+		'init': {
+			'type': 'notification',
+			'text': text
+		}
+	}))
+
+def onTimeUp(*args, **kwargs):
+	global timers
+	wasStep = args[0]
+	step = args[1]
+	del timers[wasStep]
+	say(text=lang['timerEnd'].format(step['textAfterTimer']))
+
+
+mqttClient = None
+leds = None
+running = True
+recipe = None
+currentStep = 0
+timers = {}
+confirm = 0
+lang = ''
+
+logger = logging.getLogger('MyChef')
+logger.addHandler(logging.StreamHandler())
+
+if __name__ == '__main__':
+
+	mqttClient = mqtt.Client()
+	mqttClient.on_connect = onConnect
+	mqttClient.on_message = onMessage
+	mqttClient.connect('localhost', 1883)
+	logger.info(lang['appReady'])
+	mqttClient.loop_start()
+	try:
+		while running:
+			time.sleep(0.1)
+	except KeyboardInterrupt:
+		mqttClient.loop_stop()
+		mqttClient.disconnect()
+		running = False
+	finally:
+		logger.info(lang['stopping'])
