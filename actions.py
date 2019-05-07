@@ -108,18 +108,23 @@ def onMessage(client, userData, message):
 
 		#timeType = lang['cookingTime'] if 'cookingTime' in recipe else lang['waitTime']
 		#cookOrWaitTime = recipe['cookingTime'] if 'cookingTime' in recipe else recipe['waitTime']
-
-		"""say(text=lang['recipePresentation'].format(
-			recipeName,
-			recipe['difficulty'],
-			recipe['person'],
-			recipe['totalTime'],
-			recipe['preparationTime'],
-			cookOrWaitTime,
-			timeType
-			))"""
-		#else:
-		#	endTalk(sessionId, text=lang['recipeNotFound'])
+		ss=recipe['instruction(s)']
+		etapes=[]
+		for x in ss:
+    		etapes.append(x['instruction'])
+		
+		sentence="Pour préparer "
+		say(#text=lang['recipePresentation'].format(
+			recipeName#,
+			#recipe['difficulty'],
+			#recipe['person'],
+			#recipe['totalTime'],
+			#recipe['preparationTime'],
+			#cookOrWaitTime,
+			#timeType
+			))
+		else:
+			endTalk(sessionId, text=lang['recipeNotFound'])
 
 	elif intent == NEXT_STEP:
 		if recipe is None:
