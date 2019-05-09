@@ -115,7 +115,7 @@ def onMessage(client, userData, message):
 		etapes_string=''.join(etapes)
 		
 		sentence="Pour préparer "
-		say(etapes_string)
+		hermes.publish_end_session(intent_message.session_id, etapes_string)
 		"""for i in len(etapes):
 			say(etapes[i])
 			currentStep=currentStep+1"""
