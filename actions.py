@@ -46,12 +46,25 @@ HERMES_HOTWORD_TOGGLE_ON 	= 'hermes/hotword/toggleOn'
         finalurl = baseUrl + urllib.quote(searchterm) + endUrl
 
      	response= requests.get(finalurl)
-        recipe=response.json()
-	recipe_name=recette['name']
-
 	
-	return recipe, recipe_name
-        ##print '[Received] intent: {}'.format(intent_message.intent.intent_name)
+	###recette
+        recipe=response.json()
+	###nom de la recette
+	recipe_name=recette['name']
+	
+	###etapes
+	ss=recipe['instruction(s)']
+	etapes_list=[]
+	for x in ss:
+    		etapes.append(x['instruction'])
+	etapes_string=''.join(etapes)
+	
+	print(etapes_string)
+ 	print '[Received] intent: {}'.format(intent_message.intent.intent_name)	
+	
+	return recipe, recipe_name,etapes_list,etapes_string
+
+        print '[Received] intent: {}'.format(intent_message.intent.intent_name)
 
 
 def onConnect(client, userData, flags, rc):
@@ -108,11 +121,7 @@ def onMessage(client, userData, message):
 
 		#timeType = lang['cookingTime'] if 'cookingTime' in recipe else lang['waitTime']
 		#cookOrWaitTime = recipe['cookingTime'] if 'cookingTime' in recipe else recipe['waitTime']
-		ss=recipe['instruction(s)']
-		etapes=[]
-		for x in ss:
-    			etapes.append(x['instruction'])
-		etapes_string=''.join(etapes)
+		
 		
 		sentence="Pour préparer "
 		hermes.publish_end_session(intent_message.session_id, etapes_string)
