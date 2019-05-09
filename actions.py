@@ -111,18 +111,13 @@ def onMessage(client, userData, message):
 		ss=recipe['instruction(s)']
 		etapes=[]
 		for x in ss:
-    		etapes.append(x['instruction'])
+    			etapes.append(x['instruction'])
+		etapes_string=''.join(etapes)
 		
 		sentence="Pour préparer "
-		say(#text=lang['recipePresentation'].format(
-			recipeName#,
-			#recipe['difficulty'],
-			#recipe['person'],
-			#recipe['totalTime'],
-			#recipe['preparationTime'],
-			#cookOrWaitTime,
-			#timeType
-			))
+		for i in len(etapes):
+			say(etapes[i])
+			currentStep=currentStep+1
 		else:
 			endTalk(sessionId, text=lang['recipeNotFound'])
 
