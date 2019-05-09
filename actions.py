@@ -115,9 +115,10 @@ def onMessage(client, userData, message):
 		etapes_string=''.join(etapes)
 		
 		sentence="Pour préparer "
-		for i in len(etapes):
+		say(etapes_string)
+		"""for i in len(etapes):
 			say(etapes[i])
-			currentStep=currentStep+1
+			currentStep=currentStep+1"""
 		else:
 			endTalk(sessionId, text=lang['recipeNotFound'])
 
